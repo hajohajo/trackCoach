@@ -8,6 +8,12 @@ from keras.optimizers import Adam, RMSprop
 from keras.callbacks import TensorBoard
 from keras.regularizers import l2
 from keras.initializers import RandomNormal
+from keras.layers.merge import _Merge
+import numpy as np
+
+BATCH_SIZE = 64
+TRAINING_RATIO = 5
+GRADIENT_PENALTY_WEIGHT = 10
 
 regrate = 1e-7
 
@@ -22,6 +28,19 @@ def multiply_loss(y_true, y_pred):
 
 def mean_loss(y_true, y_pred):
     return K.mean(y_pred)
+
+def gradPenaltyLoss(y_true, y_pred, averaged_samples, gradient_penalty_weight):
+    gradients = K.gradients(y_pred, averaged_samples)[0]
+    gradients_sqr = K.square(gradients)
+    gradients_sqr_sum = K.sum(gradients_sqr, axis=np.arange(1, len(gradients_sqr.shape)))
+    gradients_l2_norm = K.sqrt(gradients_sqr_sum)
+    gradient_penalty = gradient_penalty_weight * K.square(1 - gradients_l2_norm)
+    return K.mean(gradient_penalty)
+
+class randomWeightedAverage(_Merge):
+    def _merge_function(self, inputs):
+        weights = K.random_uniform((BATCH_SIZE, 1, 1, 1))
+        return (weights * inputs[0]) + ((1 - weights) * inputs[1])
 
 
 ###GradNorm layer
@@ -63,7 +82,7 @@ def make_generator(G_in, out_dim, lr=1e-3):
     x = Dense(50, activation=swish, kernel_initializer='he_uniform', kernel_regularizer=l2(regrate))(x)
     G_out = Dense(out_dim, activation='linear', kernel_initializer='he_uniform')(x)
     G = Model(G_in, G_out)
-    G.compile(loss='mae', optimizer=RMSprop(lr))
+#    G.compile(loss='mae', optimizer=RMSprop(lr))
     return G, G_out
 
 
@@ -91,7 +110,7 @@ def make_discriminator(D_in, lr=1e-3):
     x = Dense(20, activation=swish, kernel_initializer=weight_init, kernel_regularizer=l2(regrate), W_constraint = WeightClip(clipvalue))(x)
     D_out = Dense(1, activation='linear', kernel_initializer=weight_init, W_constraint = WeightClip(clipvalue))(x)
     D = Model(D_in, D_out)
-    D.compile(loss=multiply_loss, optimizer=RMSprop(lr))
+#    D.compile(loss=multiply_loss, optimizer=RMSprop(lr))
     return D, D_out
 
 ###The chained model i.e. GAN
