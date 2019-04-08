@@ -2,7 +2,8 @@ import argparse
 import os
 import numpy as np
 from keras.models import Model, Sequential
-from keras.layers import Input, Dense, Reshape, Flatten
+from keras.layers import Input, Dense, Reshape, Flatten, Dropout, Concatenate
+from keras.layers import LeakyReLU
 from keras.layers.merge import _Merge
 from keras.optimizers import Adam
 from keras import backend as K
@@ -16,15 +17,18 @@ import shutil
 import math
 from plotting import plot_losses, plot_distribution
 
+
 BATCH_SIZE = 64
-TRAINING_RATIO = 10
+TRAINING_RATIO = 5
 GRADIENT_PENALTY_WEIGHT = 10
-REGRATE = 1e-7
+REGRATE = 1e-6 #1e-7
+DROPRATE = 0.05
 EPOCHS=10000
 
 input_columns = ['trk_pt', 'trk_eta', 'trk_phi']
 output_columns = ['trk_dxyClosestPV', 'trk_dzClosestPV', 'trk_ptErr', 'trk_etaErr',
                   'trk_dxyErr', 'trk_dzErr', 'trk_nChi2']
+temp = ['trk_isTrue', 'trk_algo']
 
 def swish(x):
     beta = 1.5
@@ -41,26 +45,65 @@ def gradient_penalty_loss(y_true, y_pred, averaged_samples, gradient_penalty_wei
     gradient_penalty = gradient_penalty_weight * K.square(1 - gradient_l2_norm)
     return K.mean(gradient_penalty)
 
+activation = 'relu' #'relu'
 def make_generator(inp_dim):
     model = Sequential()
-    model.add(Dense(100, activation=swish, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE), input_dim=inp_dim))
-    model.add(Dense(100, activation=swish, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
-    model.add(Dense(100, activation=swish, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
-    model.add(Dense(100, activation=swish, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(LeakyReLU(20, alpha=0.1, activation='linear', kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE), input_dim=inp_dim))
+    model.add(LeakyReLU(20, alpha=0.1, activation='linear', kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(LeakyReLU(20, alpha=0.1, activation='linear', kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(LeakyReLU(20, alpha=0.1, activation='linear', kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(LeakyReLU(20, alpha=0.1, activation='linear', kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(LeakyReLU(20, alpha=0.1, activation='linear', kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(LeakyReLU(20, alpha=0.1, activation='linear', kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(LeakyReLU(20, alpha=0.1, activation='linear', kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(LeakyReLU(20, alpha=0.1, activation='linear', kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
     model.add(Dense(len(output_columns), activation='linear', kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dense(20, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE), input_dim=inp_dim))
+    # model.add(Dense(20, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dense(20, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dense(20, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dense(20, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dense(20, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dense(20, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dense(len(output_columns), activation='linear', kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
     return model
 
 def make_discriminator(inp_dim):
     model = Sequential()
-    model.add(Dense(10, activation=swish, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE), input_dim=inp_dim))
-    model.add(Dense(10, activation=swish, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
-    model.add(Dense(10, activation=swish, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
-    model.add(Dense(10, activation=swish, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
-    model.add(Dense(10, activation=swish, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
-    model.add(Dense(10, activation=swish, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
-    model.add(Dense(10, activation=swish, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
-    model.add(Dense(10, activation=swish, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(LeakyReLU(10, alpha=0.1, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE), input_dim=inp_dim))
+    model.add(Dropout(DROPRATE))
+    model.add(LeakyReLU(10, alpha=0.1, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(Dropout(DROPRATE))
+    model.add(LeakyReLU(10, alpha=0.1, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(Dropout(DROPRATE))
+    model.add(LeakyReLU(10, alpha=0.1, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(Dropout(DROPRATE))
+    model.add(LeakyReLU(10, alpha=0.1, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(Dropout(DROPRATE))
+    model.add(LeakyReLU(10, alpha=0.1, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(Dropout(DROPRATE))
+    model.add(LeakyReLU(10, alpha=0.1, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    model.add(Dropout(DROPRATE))
     model.add(Dense(1, activation='linear', kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+
+
+    # model.add(Dense(10, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE), input_dim=inp_dim))
+    # model.add(Dropout(DROPRATE))
+    # model.add(Dense(10, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dropout(DROPRATE))
+    # model.add(Dense(10, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dropout(DROPRATE))
+    # model.add(Dense(10, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dropout(DROPRATE))
+    # model.add(Dense(10, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dropout(DROPRATE))
+    # model.add(Dense(10, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dropout(DROPRATE))
+    # model.add(Dense(10, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dropout(DROPRATE))
+    # model.add(Dense(10, activation=activation, kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
+    # model.add(Dropout(DROPRATE))
+    # model.add(Dense(1, activation='linear', kernel_initializer='he_uniform', kernel_regularizer=l2(REGRATE)))
     return model
 
 
@@ -115,7 +158,6 @@ if __name__ == '__main__':
 
     ###Only on
 
-    temp = ['trk_isTrue', 'trk_algo']
     input_file = "data/trackingNtuple_TTBarLeptons.root"
     dataframe = root_pandas.read_root(input_file, columns=input_columns + output_columns + temp, flatten=True)[
         input_columns + output_columns + temp]
@@ -127,6 +169,10 @@ if __name__ == '__main__':
     scaler_out.fit(dataframe[output_columns])
     scaler_inp = StandardScaler()
     scaler_inp.fit(dataframe[input_columns])
+
+    from sklearn.externals import joblib
+    joblib.dump(scaler_out, 'output_scaler.pkl')
+    joblib.dump(scaler_inp, 'input_scaler.pkl')
 
     generator = make_generator(len(input_columns))
     discriminator = make_discriminator(len(output_columns))
@@ -172,7 +218,7 @@ if __name__ == '__main__':
 
     G_loss = []
     D_loss = []
-    v_freq = 10
+    v_freq = 50
     dataframe_ = dataframe.sample(frac=1.0)[output_columns]
     for epoch in range(EPOCHS):
         dataframe_ = dataframe_.sample(frac=1.0)
@@ -205,3 +251,5 @@ if __name__ == '__main__':
             for distr in output_columns:
                 plot_distribution(X[y==1][distr], binning, epoch=epoch+1, title="Generated_"+distr)
                 plot_distribution(X[y==-1][distr], binning, epoch=epoch+1, title="Real_"+distr)
+
+            generator.save('generator.h5')
