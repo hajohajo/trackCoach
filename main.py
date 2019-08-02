@@ -25,7 +25,7 @@ output_columns = ['trk_dxyClosestPV', 'trk_dzClosestPV', 'trk_ptErr', 'trk_etaEr
                   'trk_dxyErr', 'trk_dzErr', 'trk_nChi2']
 temp = ['trk_isTrue', 'trk_algo']
 input_file = "data/trackingNtuple_TTBarLeptons.root"
-dataframe = root_pandas.read_root(input_file,columns=input_columns+output_columns+temp, flatten=True)[input_columns+output_columns+temp]
+dataframe = root_pandas.read_root(input_file,columns=input_columns+output_columns+temp, flatten=True, chunksize=10000).__iter__().next()[input_columns+output_columns+temp]
 dataframe = dataframe[(dataframe.trk_isTrue==1) & (dataframe.trk_algo==4)]
 dataframe = dataframe.drop(temp, axis=1)
 
@@ -55,7 +55,7 @@ def pretrain(G, D, n_samples, batch_size=32, epochs=10):
     set_trainability(D, True)
     D.fit(X[output_columns], y, epochs=epochs, batch_size=batch_size, verbose=False)
 
-def train(GAN, G, D, epochs=100, n_samples=20000, batch_size=64, verbose=False, v_freq=10):
+def train(GAN, G, D, epochs=100, n_samples=20000, batch_size=64, verbose=False, v_freq=1):
     d_iters=10
     D_loss = []
     G_loss = []
@@ -105,6 +105,8 @@ if __name__ == '__main__':
     GAN_in = Input(shape=[len(input_columns)])
     GAN, GAN_out = make_gan(GAN_in, G, D)
 
+    print "Start pretraining"
     pretrain(G, D, 10000)
+    print "Start training"
     train(GAN, G, D, 1000, verbose=True)
 
